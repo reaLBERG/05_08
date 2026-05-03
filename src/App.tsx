@@ -12,7 +12,7 @@ import { MusicPlayer } from './components/MusicPlayer';
 import { IntroScreen } from './components/IntroScreen';
 
 export default function App() {
-  const targetDate = useMemo(() => new Date('2026-05-08T00:00:00+03:00').getTime(), []);
+  const targetDate = useMemo(() => new Date('2026-05-03T12:57:00+03:00').getTime(), []);
   
   const [timeOffset, setTimeOffset] = useState(0);
   const [isSynced, setIsSynced] = useState(false);
@@ -23,7 +23,6 @@ export default function App() {
     async function syncTime() {
       try {
         const start = Date.now();
-        // Using worldtimeapi for reliable timezone-aware current time
         const response = await fetch('https://worldtimeapi.org/api/timezone/Europe/Kyiv');
         if (!response.ok) throw new Error('Time API failed');
         const data = await response.json();
@@ -54,23 +53,46 @@ export default function App() {
   const isActuallyTime = isSynced && currentTimeMs >= targetDate;
   const isWithinGracePeriod = currentTimeMs < targetDate + REVEAL_GRACE_PERIOD;
 
-  const [hasStarted, setHasStarted] = useState(isActuallyTime);
+  const [hasStarted, setHasStarted] = useState(false);
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [trackVolume, setTrackVolume] = useState(0.4);
   const [specialVolume, setSpecialVolume] = useState(0.15);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isRevealed, setIsRevealed] = useState(isActuallyTime);
+  const [isRevealed, setIsRevealed] = useState(false);
+
+  useEffect(() => {
+    if (isSynced && isActuallyTime) {
+      const wasRevealed = localStorage.getItem('nata_birthday_revealed') === 'true';
+      if (!isWithinGracePeriod || wasRevealed) {
+        setHasStarted(true);
+        setIsRevealed(true);
+      }
+    }
+  }, [isSynced, isActuallyTime, isWithinGracePeriod]);
+
+  useEffect(() => {
+    if (isRevealed) {
+      localStorage.setItem('nata_birthday_revealed', 'true');
+    }
+  }, [isRevealed]);
   
-  const shouldShowBirthdayContent = isActuallyTime && (isRevealed || isActuallyTime);
+  const shouldShowBirthdayContent = isActuallyTime && (isRevealed || !isWithinGracePeriod);
   const confettiTriggered = useRef(false);
+  const isFirstRevealSession = useRef(true);
 
   useEffect(() => {
     let interval: any;
     let frameId: number;
 
     if (shouldShowBirthdayContent && hasStarted && !confettiTriggered.current) {
+      const alreadySeenLongAgo = !isWithinGracePeriod; 
+      if (alreadySeenLongAgo) {
+        confettiTriggered.current = true; // Mark as done without firing if long past
+        return;
+      }
+
       confettiTriggered.current = true;
       
       // Initial burst
