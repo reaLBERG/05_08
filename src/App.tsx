@@ -592,13 +592,13 @@ export default function App() {
           {/* Ambient Audio Tracks */}
           <audio 
             ref={preRef}
-            src="/audio/pre1.mp3"
+            src="/05_08/audio/pre1.mp3"
             loop
             preload="auto"
           />
           <audio 
             ref={post1Ref}
-            src="/audio/post1.mp3"
+            src="/05_08/audio/post1.mp3"
             onEnded={() => {
               setAmbientPhase('post2');
             }}
@@ -606,13 +606,13 @@ export default function App() {
           />
           <audio 
             ref={post2Ref}
-            src="/audio/post2.mp3"
+            src="/05_08/audio/post2.mp3"
             loop
             preload="auto"
           />
           <audio 
             ref={ambientRef}
-            src="/audio/ambient.mp3"
+            src="/05_08/audio/ambient.mp3"
             preload="auto"
           />
         </>
