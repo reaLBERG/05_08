@@ -12,7 +12,7 @@ import { MusicPlayer } from './components/MusicPlayer';
 import { IntroScreen } from './components/IntroScreen';
 
 export default function App() {
-  const targetDate = useMemo(() => new Date('2026-05-08T00:00:00+03:00').getTime(), []);
+  const targetDate = useMemo(() => new Date('2026-05-03T13:36:00+03:00').getTime(), []);
   
   const [timeOffset, setTimeOffset] = useState(0);
   const [isSynced, setIsSynced] = useState(false);
