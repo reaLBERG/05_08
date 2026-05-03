@@ -12,7 +12,7 @@ import { MusicPlayer } from './components/MusicPlayer';
 import { IntroScreen } from './components/IntroScreen';
 
 export default function App() {
-  const targetDate = useMemo(() => new Date('2026-05-03T12:57:00+03:00').getTime(), []);
+  const targetDate = useMemo(() => new Date('2026-05-08T00:00:00+03:00').getTime(), []);
   
   const [timeOffset, setTimeOffset] = useState(0);
   const [isSynced, setIsSynced] = useState(false);
@@ -23,21 +23,34 @@ export default function App() {
     async function syncTime() {
       try {
         const start = Date.now();
-        const response = await fetch('https://worldtimeapi.org/api/timezone/Europe/Kyiv');
+        // Trying a more stable API (World Clock API)
+        const response = await fetch('https://worldclockapi.com/api/json/est/now');
         if (!response.ok) throw new Error('Time API failed');
         const data = await response.json();
         const end = Date.now();
         const latency = (end - start) / 2;
         
-        const serverTime = new Date(data.datetime).getTime() + latency;
+        // Convert EST to Kyiv (Kyiv is usually EST + 7 or 8 depending on DST, but let's just use the UTC timestamp if available)
+        // Actually, let's use a more direct UTC-based API to avoid timezone math
+        const serverTime = new Date(data.currentDateTime).getTime() + latency;
         const offset = serverTime - end;
         
         setTimeOffset(offset);
         setCurrentTimeMs(end + offset);
         setIsSynced(true);
       } catch (error) {
-        console.error("Failed to sync time with server, falling back to local time", error);
-        setIsSynced(true);
+        console.error("Failed to sync time with primary server, trying backup...", error);
+        try {
+          // Backup: Simple fetch to any reliable site to get Date header (though headers are often restricted in browser)
+          const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Europe/Kyiv');
+          const data = await response.json();
+          const serverTime = new Date(data.dateTime).getTime();
+          setTimeOffset(serverTime - Date.now());
+          setIsSynced(true);
+        } catch (e) {
+          console.error("All time sync methods failed, falling back to local device time.", e);
+          setIsSynced(true);
+        }
       }
     }
     syncTime();
@@ -89,13 +102,12 @@ export default function App() {
     if (shouldShowBirthdayContent && hasStarted && !confettiTriggered.current) {
       const alreadySeenLongAgo = !isWithinGracePeriod; 
       if (alreadySeenLongAgo) {
-        confettiTriggered.current = true; // Mark as done without firing if long past
+        confettiTriggered.current = true;
         return;
       }
 
       confettiTriggered.current = true;
       
-      // Initial burst
       const duration = 15 * 1000;
       const animationEnd = Date.now() + duration;
       const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 1000 };
@@ -111,15 +123,12 @@ export default function App() {
         }
 
         const particleCount = 50 * (timeLeft / duration);
-        // since particles fall down, start a bit higher than random
         confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
         confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
       }, 250);
 
-      // Fireworks effect
       const end = Date.now() + 5 * 1000;
 
-      // go sparkles!
       const frame = () => {
         confetti({
           particleCount: 2,
@@ -417,11 +426,10 @@ export default function App() {
               className="space-y-4 text-lg md:text-xl text-white/70 max-w-2xl mx-auto leading-relaxed"
             >
               <p>
-                In the vast expanse of the cosmos, you are the brightest star I know. 
-                May your 25th orbit around the sun be as brilliant and magnificent as you are.
+                З ДН! 🥳 25 років — це той чудовий вік, коли ти ще "I'm just a baby 🥺", але вже доводиться гуглити "чому хрустить коліно" і щиро радіти новим Converse.
               </p>
               <p>
-                Wishing you infinite joy, cosmic adventures, and all the love the universe can hold.
+                Нехай спина ніколи не болить, а кукуха тримається міцно на своєму місці! 🥂
               </p>
             </motion.div>
 

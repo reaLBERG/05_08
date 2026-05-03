@@ -26,7 +26,7 @@ export const StarryBackground = memo(() => {
         muted
         playsInline
         className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-screen"
-        src="https://cdn.pixabay.com/video/2019/10/22/28169-368731383_large.mp4"
+        src="https://assets.mixkit.co/videos/preview/mixkit-stars-in-the-deep-space-34568-large.mp4"
       />
       
       {/* Star Particles (CSS Overlay for extra "glowing" stars) */}
