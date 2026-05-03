@@ -12,7 +12,7 @@ import { MusicPlayer } from './components/MusicPlayer';
 import { IntroScreen } from './components/IntroScreen';
 
 export default function App() {
-  const targetDate = useMemo(() => new Date('2026-05-03T13:36:00+03:00').getTime(), []);
+  const targetDate = useMemo(() => new Date('2026-05-08T00:00:00+03:00').getTime(), []);
   
   const [timeOffset, setTimeOffset] = useState(0);
   const [isSynced, setIsSynced] = useState(false);
@@ -58,7 +58,7 @@ export default function App() {
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [trackVolume, setTrackVolume] = useState(0.4);
-  const [specialVolume, setSpecialVolume] = useState(0.12);
+  const [specialVolume, setSpecialVolume] = useState(0.15);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isRevealed, setIsRevealed] = useState(isActuallyTime);
@@ -232,6 +232,7 @@ export default function App() {
           }
           ref.current.currentTime = 0; 
         } else if (ref.current.paused && ambientPhase !== 'ambient') {
+          ref.current.volume = specialVolume;
           ref.current.play().catch(() => {});
         }
       }
@@ -242,6 +243,7 @@ export default function App() {
     if (isActuallyTime && !isWithinGracePeriod) return; 
     if (hasStarted && ambientPhase === 'ambient' && !ambientInitialTriggered.current && !isPlaying) {
       if (ambientRef.current) {
+        ambientRef.current.volume = specialVolume;
         ambientRef.current.play().then(() => {
           ambientInitialTriggered.current = true;
         }).catch(() => {});
@@ -266,6 +268,7 @@ export default function App() {
     else if (ambientPhase === 'ambient') targetRef = ambientRef;
 
     if (targetRef && targetRef.current && !isPlaying) {
+      targetRef.current.volume = specialVolume;
       targetRef.current.play().catch(console.error);
     }
   };
