@@ -20,40 +20,62 @@ export default function App() {
   const REVEAL_GRACE_PERIOD = 60000;
   
   useEffect(() => {
-    async function syncTime() {
-      try {
-        const start = Date.now();
-        // Trying a more stable API (World Clock API)
-        const response = await fetch('https://worldclockapi.com/api/json/est/now');
-        if (!response.ok) throw new Error('Time API failed');
-        const data = await response.json();
-        const end = Date.now();
-        const latency = (end - start) / 2;
-        
-        // Convert EST to Kyiv (Kyiv is usually EST + 7 or 8 depending on DST, but let's just use the UTC timestamp if available)
-        // Actually, let's use a more direct UTC-based API to avoid timezone math
-        const serverTime = new Date(data.currentDateTime).getTime() + latency;
-        const offset = serverTime - end;
-        
-        setTimeOffset(offset);
-        setCurrentTimeMs(end + offset);
+    let isMounted = true;
+    
+    const syncTimeout = setTimeout(() => {
+      if (isMounted && !isSynced) {
+        console.warn("Time sync timed out, using local device time.");
         setIsSynced(true);
-      } catch (error) {
-        console.error("Failed to sync time with primary server, trying backup...", error);
+      }
+    }, 8000);
+
+    async function syncTime() {
+      const apis = [
+        'https://timeapi.io/api/Time/current/zone?timeZone=Europe/Kyiv',
+        'https://worldtimeapi.org/api/timezone/Europe/Kyiv'
+      ];
+
+      for (const url of apis) {
+        if (!isMounted) return;
         try {
-          // Backup: Simple fetch to any reliable site to get Date header (though headers are often restricted in browser)
-          const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Europe/Kyiv');
+          const start = Date.now();
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) continue;
+          
           const data = await response.json();
-          const serverTime = new Date(data.dateTime).getTime();
-          setTimeOffset(serverTime - Date.now());
-          setIsSynced(true);
+          const end = Date.now();
+          const latency = (end - start) / 2;
+          
+          const timeStr = data.dateTime || data.datetime;
+          const serverTime = new Date(timeStr).getTime() + latency;
+          
+          if (isMounted) {
+            setTimeOffset(serverTime - end);
+            setCurrentTimeMs(end + (serverTime - end));
+            setIsSynced(true);
+            clearTimeout(syncTimeout);
+            return;
+          }
         } catch (e) {
-          console.error("All time sync methods failed, falling back to local device time.", e);
-          setIsSynced(true);
         }
       }
+
+      if (isMounted && !isSynced) {
+        setIsSynced(true);
+        clearTimeout(syncTimeout);
+      }
     }
+
     syncTime();
+    return () => { 
+      isMounted = false; 
+      clearTimeout(syncTimeout); 
+    };
   }, []);
 
   useEffect(() => {
@@ -426,7 +448,7 @@ export default function App() {
               className="space-y-4 text-lg md:text-xl text-white/70 max-w-2xl mx-auto leading-relaxed"
             >
               <p>
-                З ДН! 🥳 25 років — це той чудовий вік, коли ти ще "I'm just a baby 🥺", але вже доводиться гуглити "чому хрустить коліно" і щиро радіти новим Converse.
+                З ДН! 🥳 25 років — це той чудовий вік, коли ти ще "I'm just a baby 🥺", але вже доводиться гуглити "чому хрустить коліно" і щиро радіти новій сковорідці.
               </p>
               <p>
                 Нехай спина ніколи не болить, а кукуха тримається міцно на своєму місці! 🥂
