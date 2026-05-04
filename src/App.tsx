@@ -18,6 +18,7 @@ export default function App() {
   const [debugTargetDate, setDebugTargetDate] = useState<number | null>(null);
   const REVEAL_GRACE_PERIOD = 60000;
   
+
   const targetDate = useMemo(() => {
     return debugTargetDate || new Date('2026-05-08T00:00:00+03:00').getTime();
   }, [debugTargetDate]);
@@ -101,7 +102,7 @@ export default function App() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTimeMs(Date.now() + timeOffset);
-    }, 1000); // Changed back to 1000ms to prevent huge CPU load from React rendering
+    }, 1000); 
     return () => clearInterval(timer);
   }, [timeOffset]);
 
