@@ -60,7 +60,7 @@ export const Countdown = ({ targetDate, currentTimeMs, onComplete }: { targetDat
           }}
           transition={{ 
             scale: { duration: 6.4, repeat: Infinity, ease: 'easeInOut' },
-            opacity: { duration: isRockPhase ? 5.4 : 3, repeat: isRockPhase ? Infinity : 0, ease: 'easeInOut' }
+            opacity: { duration: isRockPhase ? 4 : 3, repeat: isRockPhase ? Infinity : 0, ease: 'easeInOut' }
           }}
           className="absolute w-[700px] h-[700px] bg-red-600/55 rounded-full blur-[100px]" 
         />

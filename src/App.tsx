@@ -554,7 +554,7 @@ export default function App() {
         </section>
 
         {/* Video Gift Section */}
-        <section className="py-6 md:py-8 px-6 max-w-6xl mx-auto">
+        <section className="py-6 md:py-8 px-6 max-w-6xl mx-auto relative z-10">
           <motion.div
              initial={{ opacity: 0, y: 50 }}
              whileInView={{ opacity: 1, y: 0 }}
@@ -566,10 +566,14 @@ export default function App() {
               <div className="h-px flex-1 bg-white/20" />
             </div>
 
-            <div 
-              className="aspect-video w-full rounded-2xl md:rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-2xl relative group cursor-pointer"
-              onClick={() => setIsVideoIframeLoaded(true)}
-            >
+            <div className="relative">
+              {/* YouTube Ambient Mode Simulation */}
+              <div className="absolute -inset-8 md:-inset-16 -z-10 bg-[url('https://img.youtube.com/vi/yaJnJ3EKMxw/maxresdefault.jpg')] bg-cover bg-center blur-[80px] md:blur-[100px] opacity-40 saturate-[1.5] brightness-125 transform-gpu rounded-[40px] pointer-events-none" />
+
+              <div 
+                className="aspect-video w-full rounded-2xl md:rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative group cursor-pointer"
+                onClick={() => setIsVideoIframeLoaded(true)}
+              >
               {!isVideoIframeLoaded ? (
                 <>
                   <img 
@@ -594,6 +598,7 @@ export default function App() {
                 />
               )}
               <div className="absolute inset-0 pointer-events-none border-[6px] md:border-[12px] border-black/20 rounded-2xl md:rounded-3xl" />
+            </div>
             </div>
           </motion.div>
         </section>
