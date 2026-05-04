@@ -60,9 +60,9 @@ export const Countdown = ({ targetDate, currentTimeMs, onComplete }: { targetDat
           }}
           transition={{ 
             scale: { duration: 6.4, repeat: Infinity, ease: 'easeInOut' },
-            opacity: { duration: isRockPhase ? 5.4 : 3, repeat: isRockPhase ? Infinity : 0, ease: 'easeInOut' }
+            opacity: { duration: isRockPhase ? 6.4 : 3, repeat: isRockPhase ? Infinity : 0, ease: 'easeInOut' }
           }}
-          className="absolute w-[700px] h-[700px] bg-red-600/55 rounded-full blur-[100px]" 
+          className="absolute w-[700px] h-[700px] bg-red-600/50 rounded-full blur-[100px]" 
         />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 mix-blend-screen" />
       </div>
