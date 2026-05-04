@@ -17,6 +17,7 @@ export default function App() {
   const [currentTimeMs, setCurrentTimeMs] = useState(Date.now());
   const [debugTargetDate, setDebugTargetDate] = useState<number | null>(null);
   const REVEAL_GRACE_PERIOD = 60000;
+
   
 
   const targetDate = useMemo(() => {
