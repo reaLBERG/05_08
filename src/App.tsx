@@ -21,7 +21,7 @@ export default function App() {
   
 
   const targetDate = useMemo(() => {
-    return debugTargetDate || new Date('2026-05-08T00:00:00+03:00').getTime();
+    return debugTargetDate || new Date('2026-05-08T01:00:00+03:00').getTime();
   }, [debugTargetDate]);
 
   useEffect(() => {
