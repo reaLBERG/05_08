@@ -4,6 +4,7 @@ import { FlipUnit } from './FlipUnit';
 
 export const Countdown = ({ targetDate, currentTimeMs, onComplete }: { targetDate: number; currentTimeMs: number; onComplete: () => void; key?: string }) => {
   const [timeLeft, setTimeLeft] = useState<{ d: number; h: number; m: number; s: number } | null>(null);
+  const isRockPhase = targetDate - currentTimeMs <= 28000;
 
   useEffect(() => {
     const distance = targetDate - currentTimeMs;
@@ -37,19 +38,31 @@ export const Countdown = ({ targetDate, currentTimeMs, onComplete }: { targetDat
       <div className="absolute inset-0 z-0 flex items-center justify-center overflow-hidden pointer-events-none">
         <motion.div 
           animate={{ 
-            scale: [1, 1.4, 1],
-            opacity: [0.3, 0.6, 0.3]
+            scale: isRockPhase ? 1.4 : [1, 1.4, 1],
+            opacity: isRockPhase ? 0 : [0.3, 0.6, 0.3]
           }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+          transition={{ duration: isRockPhase ? 2 : 8, repeat: isRockPhase ? 0 : Infinity, ease: 'easeInOut' }}
           className="absolute w-[800px] h-[800px] bg-blue-600/40 rounded-full blur-[120px]" 
         />
         <motion.div 
           animate={{ 
             scale: [1.2, 1, 1.2],
-            opacity: [0.2, 0.5, 0.2]
+            opacity: isRockPhase ? 0 : [0.2, 0.5, 0.2]
           }}
-          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          transition={{ duration: isRockPhase ? 2 : 12, repeat: isRockPhase ? 0 : Infinity, ease: 'easeInOut' }}
           className="absolute w-[600px] h-[600px] bg-orange-600/30 rounded-full blur-[100px]" 
+        />
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ 
+            scale: isRockPhase ? [1, 1.3, 1] : 1,
+            opacity: isRockPhase ? [0.25, 0.55, 0.25] : 0
+          }}
+          transition={{ 
+            scale: { duration: 6.4, repeat: Infinity, ease: 'easeInOut' },
+            opacity: { duration: isRockPhase ? 5.4 : 3, repeat: isRockPhase ? Infinity : 0, ease: 'easeInOut' }
+          }}
+          className="absolute w-[700px] h-[700px] bg-red-600/55 rounded-full blur-[100px]" 
         />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 mix-blend-screen" />
       </div>

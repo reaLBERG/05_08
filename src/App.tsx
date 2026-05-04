@@ -12,19 +12,21 @@ import { MusicPlayer } from './components/MusicPlayer';
 import { IntroScreen } from './components/IntroScreen';
 
 export default function App() {
-  const targetDate = useMemo(() => new Date('2026-05-08T00:00:00+03:00').getTime(), []);
-  
   const [timeOffset, setTimeOffset] = useState(0);
   const [isSynced, setIsSynced] = useState(false);
   const [currentTimeMs, setCurrentTimeMs] = useState(Date.now());
+  const [debugTargetDate, setDebugTargetDate] = useState<number | null>(null);
   const REVEAL_GRACE_PERIOD = 60000;
   
+  const targetDate = useMemo(() => {
+    return debugTargetDate || new Date('2026-05-04T16:47:00+03:00').getTime();
+  }, [debugTargetDate]);
+
   useEffect(() => {
     let isMounted = true;
     
     const syncTimeout = setTimeout(() => {
       if (isMounted && !isSynced) {
-        console.warn("Time sync timed out, using local device time.");
         setIsSynced(true);
       }
     }, 8000);
@@ -72,6 +74,24 @@ export default function App() {
     }
 
     syncTime();
+
+    // Debug Helpers for Console
+    (window as any).forceReveal = () => {
+      console.log("🚀 Forced reveal triggered!");
+      setIsRevealed(true);
+      setHasStarted(true);
+    };
+
+    (window as any).setDebugDate = (dateStr: string) => {
+      const newDate = new Date(dateStr).getTime();
+      if (isNaN(newDate)) {
+        console.error("❌ Invalid date format. Use YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss");
+        return;
+      }
+      console.log(`📡 Setting debug target date to: ${new Date(newDate).toLocaleString()}`);
+      setDebugTargetDate(newDate);
+    };
+
     return () => { 
       isMounted = false; 
       clearTimeout(syncTimeout); 
@@ -81,7 +101,7 @@ export default function App() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTimeMs(Date.now() + timeOffset);
-    }, 1000);
+    }, 50); // Faster update for smoother audio transitions
     return () => clearInterval(timer);
   }, [timeOffset]);
 
@@ -188,24 +208,46 @@ export default function App() {
   }, [shouldShowBirthdayContent]);
 
   const [isVideoIframeLoaded, setIsVideoIframeLoaded] = useState(false);
-  const [ambientPhase, setAmbientPhase] = useState<'pre' | 'post1' | 'post2' | 'ambient'>(isActuallyTime ? 'ambient' : 'pre');
-  const ambientInitialTriggered = useRef(false);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const preRef = useRef<HTMLAudioElement | null>(null);
-  const post1Ref = useRef<HTMLAudioElement | null>(null);
-  const post2Ref = useRef<HTMLAudioElement | null>(null);
-  const ambientRef = useRef<HTMLAudioElement | null>(null);
+  const engineRef = useRef<{ ctx: AudioContext, gainNode: GainNode, sources: AudioBufferSourceNode[] } | null>(null);
+  const preloadedBuffers = useRef<Record<string, ArrayBuffer>>({});
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = trackVolume;
   }, [trackVolume]);
 
   useEffect(() => {
-    if (isActuallyTime && !isWithinGracePeriod) return; 
-    [preRef, post1Ref, post2Ref, ambientRef].forEach(ref => {
-      if (ref.current) ref.current.volume = specialVolume;
-    });
+    if (!isActuallyTime || isWithinGracePeriod) {
+        const urls = { pre1: '/05_08/audio/pre1.mp3', post1: '/05_08/audio/post1.mp3', post2: '/05_08/audio/post2.mp3', ambient: '/05_08/audio/ambient.mp3' };
+        Object.entries(urls).forEach(async ([key, url]) => {
+           try {
+             const res = await fetch(url);
+             preloadedBuffers.current[key] = await res.arrayBuffer();
+           } catch(e) { console.warn("Preload failed", key); }
+        });
+    }
+  }, [isActuallyTime, isWithinGracePeriod]);
+
+  // Control Web Audio Engine Volume & Cleanup
+  useEffect(() => {
+    if (isActuallyTime && !isWithinGracePeriod) {
+       if (engineRef.current) {
+          const { ctx, gainNode, sources } = engineRef.current;
+          gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 3);
+          setTimeout(() => {
+             sources.forEach(s => { try { s.stop(); } catch(e) {} });
+             ctx.close();
+             engineRef.current = null;
+          }, 3500);
+       }
+    } else {
+        if (engineRef.current && engineRef.current.ctx.state !== "closed") {
+            try {
+                engineRef.current.gainNode.gain.linearRampToValueAtTime(specialVolume, engineRef.current.ctx.currentTime + 0.1);
+            } catch (e) {}
+        }
+    }
   }, [specialVolume, isActuallyTime, isWithinGracePeriod]);
 
   useEffect(() => {
@@ -242,88 +284,118 @@ export default function App() {
     };
   }, [isActuallyTime]);
 
-  useEffect(() => {
-    if (isActuallyTime && !isWithinGracePeriod) return; 
+  const startAmbientEngine = async () => {
+    if (engineRef.current) return;
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AudioContextClass();
+    const gainNode = ctx.createGain();
     
-    const checkStatus = () => {
-      const now = new Date().getTime();
-      const distance = targetDate - now;
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(specialVolume || 0.15, ctx.currentTime + 2);
+    gainNode.connect(ctx.destination);
 
-      if (isRevealed || distance <= 0) {
-        if (!isRevealed && distance <= 0) setIsRevealed(true);
-        if (ambientPhase !== 'ambient') {
-          setAmbientPhase('ambient');
+    const decoded: Record<string, AudioBuffer> = {};
+    const urls = { pre1: '/05_08/audio/pre1.mp3', post1: '/05_08/audio/post1.mp3', post2: '/05_08/audio/post2.mp3', ambient: '/05_08/audio/ambient.mp3' };
+
+    await Promise.all(Object.entries(urls).map(async ([key, url]) => {
+         let arrayBuffer = preloadedBuffers.current[key];
+         if (!arrayBuffer) {
+             try {
+                 const res = await fetch(url);
+                 arrayBuffer = await res.arrayBuffer();
+             } catch(e) {}
+         }
+         if (arrayBuffer) {
+             try {
+                 decoded[key] = await ctx.decodeAudioData(arrayBuffer.slice(0)); 
+             } catch(e) { console.error("Decode fail", e); }
+         }
+    }));
+
+    const nowReal = Date.now() + timeOffset;
+    const baseCtxTime = ctx.currentTime;
+    const toCtxTime = (tRealMs: number) => baseCtxTime + (tRealMs - nowReal) / 1000;
+
+    const post1StartReal = targetDate - 40000;
+    const post2StartReal = targetDate - 13000;
+    const ambientStartReal = targetDate;
+    
+    const sources: AudioBufferSourceNode[] = [];
+
+    const schedule = (buffer: AudioBuffer, startReal: number, endReal?: number, loop = false, manualOffset?: number) => {
+        const startTimeCtx = toCtxTime(startReal);
+        let actualStartTimeCtx = startTimeCtx;
+        let offsetCtx = manualOffset !== undefined ? manualOffset : 0;
+
+        if (startTimeCtx < ctx.currentTime) {
+            actualStartTimeCtx = ctx.currentTime;
+            const pastSeconds = ctx.currentTime - startTimeCtx;
+            if (manualOffset !== undefined) { offsetCtx = manualOffset + pastSeconds; } 
+            else if (loop) { offsetCtx = pastSeconds % buffer.duration; } 
+            else { offsetCtx = pastSeconds; }
+            if (!loop && offsetCtx >= buffer.duration) return;
         }
-      } else if (distance <= 15000 && ambientPhase !== 'post2') {
-        setAmbientPhase('post2');
-      } else if (distance <= 45000 && ambientPhase === 'pre') {
-        setAmbientPhase('post1');
-      }
+
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = loop;
+        source.connect(gainNode);
+        source.start(actualStartTimeCtx, offsetCtx);
+
+        if (endReal) {
+            const endTimeCtx = toCtxTime(endReal);
+            if (endTimeCtx > ctx.currentTime) {
+               source.stop(endTimeCtx);
+            } else {
+               source.stop(ctx.currentTime);
+            }
+        }
+        sources.push(source);
     };
-    checkStatus();
-    const interval = setInterval(checkStatus, 500);
-    return () => clearInterval(interval);
-  }, [targetDate, ambientPhase, isRevealed, isActuallyTime]);
 
-  useEffect(() => {
-    if (!hasStarted || (isActuallyTime && !isWithinGracePeriod)) return;
-
-    [preRef, post1Ref, post2Ref, ambientRef].forEach(ref => {
-      const isCurrentPhase = (
-        (ambientPhase === 'pre' && ref === preRef) ||
-        (ambientPhase === 'post1' && ref === post1Ref) ||
-        (ambientPhase === 'post2' && ref === post2Ref) ||
-        (ambientPhase === 'ambient' && ref === ambientRef)
-      );
-
-      const shouldBePlaying = !isPlaying && isCurrentPhase;
-
-      if (ref.current) {
-        if (!shouldBePlaying) {
-          if (!ref.current.paused) {
-            ref.current.pause();
-          }
-          ref.current.currentTime = 0; 
-        } else if (ref.current.paused && ambientPhase !== 'ambient') {
-          ref.current.volume = specialVolume;
-          ref.current.play().catch(() => {});
+    if (nowReal < post1StartReal && decoded.pre1) {
+        const distToPost1Ms = post1StartReal - nowReal;
+        // Strictly align to exactly 12 seconds musically, ignoring the actual file duration 
+        // to prevent mp3 padding from shifting the cadence over time
+        const firstBoundarySec = (distToPost1Ms / 1000) % 12;
+        let startGridMs = nowReal;
+        
+        if (firstBoundarySec > 0.001) {
+            const offset = (12 - firstBoundarySec) % 12;
+            schedule(decoded.pre1, startGridMs, startGridMs + firstBoundarySec * 1000, false, offset);
+            startGridMs += firstBoundarySec * 1000;
         }
-      }
-    });
-  }, [hasStarted, ambientPhase, isPlaying, isActuallyTime]);
 
-  useEffect(() => {
-    if (isActuallyTime && !isWithinGracePeriod) return; 
-    if (hasStarted && ambientPhase === 'ambient' && !ambientInitialTriggered.current && !isPlaying) {
-      if (ambientRef.current) {
-        ambientRef.current.volume = specialVolume;
-        ambientRef.current.play().then(() => {
-          ambientInitialTriggered.current = true;
-        }).catch(() => {});
-      }
+        while (Math.round(post1StartReal - startGridMs) >= 12000) {
+            schedule(decoded.pre1, startGridMs, startGridMs + 12000, false, 0);
+            startGridMs += 12000;
+        }
     }
-  }, [hasStarted, ambientPhase, isPlaying, isActuallyTime]);
+
+    if (nowReal < post2StartReal && decoded.post1) {
+        schedule(decoded.post1, post1StartReal, post2StartReal, false);
+    }
+
+    if (nowReal < ambientStartReal && decoded.post2) {
+        schedule(decoded.post2, post2StartReal, ambientStartReal, true);
+    }
+
+    if (decoded.ambient) {
+        schedule(decoded.ambient, ambientStartReal, undefined, false);
+    }
+
+    engineRef.current = { ctx, gainNode, sources };
+  };
 
   const handleStart = () => {
     setHasStarted(true);
     if (isActuallyTime) return; 
     
-    [preRef, post1Ref, post2Ref, ambientRef, audioRef].forEach(ref => {
-      if (ref.current) {
-        ref.current.load();
-      }
-    });
-
-    let targetRef: React.RefObject<HTMLAudioElement | null> | null = null;
-    if (ambientPhase === 'pre') targetRef = preRef;
-    else if (ambientPhase === 'post1') targetRef = post1Ref;
-    else if (ambientPhase === 'post2') targetRef = post2Ref;
-    else if (ambientPhase === 'ambient') targetRef = ambientRef;
-
-    if (targetRef && targetRef.current && !isPlaying) {
-      targetRef.current.volume = specialVolume;
-      targetRef.current.play().catch(console.error);
+    if (audioRef.current) {
+        audioRef.current.load();
     }
+    
+    startAmbientEngine();
   };
 
   const handleTrackSelect = (track: Track) => {
@@ -642,36 +714,7 @@ export default function App() {
         onLoadedMetadata={onLoadedMetadata}
       />
 
-      {(!isActuallyTime || isWithinGracePeriod) && (
-        <>
-          {/* Ambient Audio Tracks */}
-          <audio 
-            ref={preRef}
-            src="/05_08/audio/pre1.mp3"
-            loop
-            preload="auto"
-          />
-          <audio 
-            ref={post1Ref}
-            src="/05_08/audio/post1.mp3"
-            onEnded={() => {
-              setAmbientPhase('post2');
-            }}
-            preload="auto"
-          />
-          <audio 
-            ref={post2Ref}
-            src="/05_08/audio/post2.mp3"
-            loop
-            preload="auto"
-          />
-          <audio 
-            ref={ambientRef}
-            src="/05_08/audio/ambient.mp3"
-            preload="auto"
-          />
-        </>
-      )}
+
 
       <style>{`
         .perspective-1000 {
