@@ -101,7 +101,7 @@ export default function App() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTimeMs(Date.now() + timeOffset);
-    }, 50); // Faster update for smoother audio transitions
+    }, 1000); // Changed back to 1000ms to prevent huge CPU load from React rendering
     return () => clearInterval(timer);
   }, [timeOffset]);
 
@@ -322,16 +322,17 @@ export default function App() {
     
     const sources: AudioBufferSourceNode[] = [];
 
-    const schedule = (buffer: AudioBuffer, startReal: number, endReal?: number, loop = false, manualOffset?: number) => {
+    const schedule = (buffer: AudioBuffer, startReal: number, endReal?: number, loop = false, manualOffset?: number, exactDurationSec?: number) => {
         const startTimeCtx = toCtxTime(startReal);
         let actualStartTimeCtx = startTimeCtx;
         let offsetCtx = manualOffset !== undefined ? manualOffset : 0;
+        const loopLen = exactDurationSec || buffer.duration;
 
         if (startTimeCtx < ctx.currentTime) {
             actualStartTimeCtx = ctx.currentTime;
             const pastSeconds = ctx.currentTime - startTimeCtx;
-            if (manualOffset !== undefined) { offsetCtx = manualOffset + pastSeconds; } 
-            else if (loop) { offsetCtx = pastSeconds % buffer.duration; } 
+            if (manualOffset !== undefined) { offsetCtx = (manualOffset + pastSeconds) % loopLen; } 
+            else if (loop) { offsetCtx = pastSeconds % loopLen; } 
             else { offsetCtx = pastSeconds; }
             if (!loop && offsetCtx >= buffer.duration) return;
         }
@@ -339,6 +340,10 @@ export default function App() {
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.loop = loop;
+        if (loop && exactDurationSec && exactDurationSec <= buffer.duration) {
+            source.loopStart = 0;
+            source.loopEnd = exactDurationSec;
+        }
         source.connect(gainNode);
         source.start(actualStartTimeCtx, offsetCtx);
 
@@ -355,21 +360,9 @@ export default function App() {
 
     if (nowReal < post1StartReal && decoded.pre1) {
         const distToPost1Ms = post1StartReal - nowReal;
-        // Strictly align to exactly 12 seconds musically, ignoring the actual file duration 
-        // to prevent mp3 padding from shifting the cadence over time
-        const firstBoundarySec = (distToPost1Ms / 1000) % 12;
-        let startGridMs = nowReal;
-        
-        if (firstBoundarySec > 0.001) {
-            const offset = (12 - firstBoundarySec) % 12;
-            schedule(decoded.pre1, startGridMs, startGridMs + firstBoundarySec * 1000, false, offset);
-            startGridMs += firstBoundarySec * 1000;
-        }
-
-        while (Math.round(post1StartReal - startGridMs) >= 12000) {
-            schedule(decoded.pre1, startGridMs, startGridMs + 12000, false, 0);
-            startGridMs += 12000;
-        }
+        // The math ensures the start loop hits the beginning of the file strictly relative to post1StartReal 
+        const offset = (12 - ((distToPost1Ms / 1000) % 12)) % 12;
+        schedule(decoded.pre1, nowReal, post1StartReal, true, offset, 12);
     }
 
     if (nowReal < post2StartReal && decoded.post1) {
