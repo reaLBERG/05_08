@@ -1,15 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { FlipUnit } from './FlipUnit';
 
 export const Countdown = ({ targetDate, currentTimeMs, onComplete }: { targetDate: number; currentTimeMs: number; onComplete: () => void; key?: string }) => {
   const [timeLeft, setTimeLeft] = useState<{ d: number; h: number; m: number; s: number } | null>(null);
   const isRockPhase = targetDate - currentTimeMs <= 28000;
+  const hasFinishedRef = useRef(false);
 
   useEffect(() => {
+    if (hasFinishedRef.current) return;
     const distance = targetDate - currentTimeMs;
 
     if (distance <= 0) {
+      hasFinishedRef.current = true;
       onComplete();
       return;
     }
@@ -35,43 +38,46 @@ export const Countdown = ({ targetDate, currentTimeMs, onComplete }: { targetDat
       className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#050505] p-6 text-center overflow-hidden"
     >
       {/* Visual background elements */}
-      <div className="absolute inset-0 z-0 flex items-center justify-center overflow-hidden pointer-events-none">
-        <motion.div 
-          animate={{ 
-            scale: isRockPhase ? 1.4 : [1, 1.4, 1],
-            opacity: isRockPhase ? 0 : [0.3, 0.6, 0.3]
-          }}
-          transition={{ duration: isRockPhase ? 2 : 8, repeat: isRockPhase ? 0 : Infinity, ease: 'easeInOut' }}
-          className="absolute w-[800px] h-[800px] bg-blue-600/40 rounded-full blur-[120px]" 
-        />
-        <motion.div 
-          animate={{ 
-            scale: [1.2, 1, 1.2],
-            opacity: isRockPhase ? 0 : [0.2, 0.5, 0.2]
-          }}
-          transition={{ duration: isRockPhase ? 2 : 12, repeat: isRockPhase ? 0 : Infinity, ease: 'easeInOut' }}
-          className="absolute w-[600px] h-[600px] bg-orange-600/30 rounded-full blur-[100px]" 
-        />
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ 
-            scale: isRockPhase ? [1, 1.3, 1] : 1,
-            opacity: isRockPhase ? [0.25, 0.55, 0.25] : 0
-          }}
-          transition={{ 
-            scale: { duration: 6.4, repeat: Infinity, ease: 'easeInOut' },
-            opacity: { duration: isRockPhase ? 4 : 3, repeat: isRockPhase ? Infinity : 0, ease: 'easeInOut' }
-          }}
-          className="absolute w-[700px] h-[700px] bg-red-600/55 rounded-full blur-[100px]" 
-        />
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 mix-blend-screen" />
-      </div>
+          <div className="absolute inset-0 z-0 flex items-center justify-center overflow-hidden pointer-events-none">
+            <motion.div 
+              animate={{ 
+                scale: isRockPhase ? 1.4 : [1, 1.4, 1],
+                opacity: isRockPhase ? 0 : [0.3, 0.6, 0.3]
+              }}
+              transition={{ duration: isRockPhase ? 2 : 8, repeat: isRockPhase ? 0 : Infinity, ease: 'easeInOut' }}
+              className="absolute w-[400px] h-[400px] md:w-[800px] md:h-[800px] rounded-full transform-gpu will-change-transform" 
+              style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgba(37,99,235,0.4) 0%, transparent 100%)' }}
+            />
+            <motion.div 
+              animate={{ 
+                scale: [1.2, 1, 1.2],
+                opacity: isRockPhase ? 0 : [0.2, 0.5, 0.2]
+              }}
+              transition={{ duration: isRockPhase ? 2 : 12, repeat: isRockPhase ? 0 : Infinity, ease: 'easeInOut' }}
+              className="absolute w-[300px] h-[300px] md:w-[600px] md:h-[600px] rounded-full transform-gpu will-change-transform" 
+              style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgba(234,88,12,0.3) 0%, transparent 100%)' }}
+            />
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ 
+                scale: isRockPhase ? [1, 1.3, 1] : 1,
+                opacity: isRockPhase ? [0.25, 0.55, 0.25] : 0
+              }}
+              transition={{ 
+                scale: { duration: 6.4, repeat: Infinity, ease: 'easeInOut' },
+                opacity: { duration: isRockPhase ? 4 : 3, repeat: isRockPhase ? Infinity : 0, ease: 'easeInOut' }
+              }}
+              className="absolute w-[350px] h-[350px] md:w-[700px] md:h-[700px] rounded-full transform-gpu will-change-transform" 
+              style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgba(220,38,38,0.55) 0%, transparent 100%)' }}
+            />
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30" />
+          </div>
       
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8 }}
-        className="relative z-10 space-y-12 md:space-y-20"
+        className="relative z-10 w-full flex flex-col items-center justify-center gap-20 md:gap-24 max-w-4xl"
       >
         <div className="space-y-4 md:space-y-6">
           <motion.div

@@ -21,7 +21,7 @@ export default function App() {
   
 
   const targetDate = useMemo(() => {
-    return debugTargetDate || new Date('2026-05-08T00:00:00+03:00').getTime();
+    return debugTargetDate || new Date('2026-05-07T00:00:00+03:00').getTime();
   }, [debugTargetDate]);
 
   useEffect(() => {
@@ -80,8 +80,8 @@ export default function App() {
     // Debug Helpers for Console
     (window as any).forceReveal = () => {
       console.log("🚀 Forced reveal triggered!");
-      setIsRevealed(true);
-      setHasStarted(true);
+      setIsRevealedState(true);
+      setHasStartedState(true);
     };
 
     (window as any).setDebugDate = (dateStr: string) => {
@@ -109,31 +109,27 @@ export default function App() {
 
   const isActuallyTime = isSynced && currentTimeMs >= targetDate;
   const isWithinGracePeriod = currentTimeMs < targetDate + REVEAL_GRACE_PERIOD;
+  const wasRevealed = typeof window !== 'undefined' ? localStorage.getItem('nata_birthday_revealed') === 'true' : false;
+  const shouldSkipIntro = isActuallyTime && (!isWithinGracePeriod || wasRevealed);
 
-  const [hasStarted, setHasStarted] = useState(false);
+  const [hasStartedState, setHasStartedState] = useState(false);
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isYoutubePlaying, setIsYoutubePlaying] = useState(false);
   const [trackVolume, setTrackVolume] = useState(0.4);
   const [specialVolume, setSpecialVolume] = useState(0.15);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isRevealed, setIsRevealed] = useState(false);
+  const [isRevealedState, setIsRevealedState] = useState(false);
+
+  const hasStarted = hasStartedState || shouldSkipIntro;
+  const isRevealed = isRevealedState || shouldSkipIntro;
 
   useEffect(() => {
-    if (isSynced && isActuallyTime) {
-      const wasRevealed = localStorage.getItem('nata_birthday_revealed') === 'true';
-      if (!isWithinGracePeriod || wasRevealed) {
-        setHasStarted(true);
-        setIsRevealed(true);
-      }
-    }
-  }, [isSynced, isActuallyTime, isWithinGracePeriod]);
-
-  useEffect(() => {
-    if (isRevealed) {
+    if (isRevealedState) {
       localStorage.setItem('nata_birthday_revealed', 'true');
     }
-  }, [isRevealed]);
+  }, [isRevealedState]);
   
   const shouldShowBirthdayContent = isActuallyTime && (isRevealed || !isWithinGracePeriod);
   const confettiTriggered = useRef(false);
@@ -246,11 +242,24 @@ export default function App() {
     } else {
         if (engineRef.current && engineRef.current.ctx.state !== "closed") {
             try {
-                engineRef.current.gainNode.gain.linearRampToValueAtTime(specialVolume, engineRef.current.ctx.currentTime + 0.1);
+                const now = engineRef.current.ctx.currentTime;
+                engineRef.current.gainNode.gain.cancelScheduledValues(now);
+                if (isPlaying || isYoutubePlaying) {
+                    engineRef.current.gainNode.gain.linearRampToValueAtTime(0, now + 0.5);
+                    setTimeout(() => {
+                        if (engineRef.current) {
+                            engineRef.current.sources.forEach(s => { try { s.stop(); } catch(e) {} });
+                            engineRef.current.ctx.close();
+                            engineRef.current = null;
+                        }
+                    }, 600);
+                } else {
+                    engineRef.current.gainNode.gain.linearRampToValueAtTime(specialVolume, now + 0.3);
+                }
             } catch (e) {}
         }
     }
-  }, [specialVolume, isActuallyTime, isWithinGracePeriod]);
+  }, [specialVolume, isActuallyTime, isWithinGracePeriod, isPlaying, isYoutubePlaying]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -262,9 +271,14 @@ export default function App() {
         
         const isPlayingState = (data.event === "onStateChange" && (data.info === 1 || data.info === 3));
         const isInfoPlaying = (data.event === "infoDelivery" && data.info && (data.info.playerState === 1 || data.info.playerState === 3));
+        const isPausedState = (data.event === "onStateChange" && (data.info === 2 || data.info === 0 || data.info === -1));
+        const isInfoPaused = (data.event === "infoDelivery" && data.info && (data.info.playerState === 2 || data.info.playerState === 0 || data.info.playerState === -1));
         
         if (isPlayingState || isInfoPlaying) {
           setIsPlaying(false); 
+          setIsYoutubePlaying(true);
+        } else if (isPausedState || isInfoPaused) {
+          setIsYoutubePlaying(false);
         }
       } catch (e) {
       }
@@ -274,6 +288,7 @@ export default function App() {
       setTimeout(() => {
         if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
           setIsPlaying(false);
+          setIsYoutubePlaying(true);
         }
       }, 100);
     };
@@ -324,7 +339,7 @@ export default function App() {
     
     const sources: AudioBufferSourceNode[] = [];
 
-    const schedule = (buffer: AudioBuffer, startReal: number, endReal?: number, loop = false, manualOffset?: number, exactDurationSec?: number) => {
+    const schedule = (buffer: AudioBuffer, startReal: number, endReal?: number, loop = false, manualOffset?: number, exactDurationSec?: number, crossfade: number = 0.5) => {
         const startTimeCtx = toCtxTime(startReal);
         let actualStartTimeCtx = startTimeCtx;
         let offsetCtx = manualOffset !== undefined ? manualOffset : 0;
@@ -346,14 +361,24 @@ export default function App() {
             source.loopStart = 0;
             source.loopEnd = exactDurationSec;
         }
-        source.connect(gainNode);
+
+        const localGain = ctx.createGain();
+        localGain.connect(gainNode);
+        source.connect(localGain);
+
+        localGain.gain.setValueAtTime(0, Math.max(0, actualStartTimeCtx - 0.05));
+        localGain.gain.linearRampToValueAtTime(1, actualStartTimeCtx + crossfade);
+
         source.start(actualStartTimeCtx, offsetCtx);
 
         if (endReal) {
             const endTimeCtx = toCtxTime(endReal);
             if (endTimeCtx > ctx.currentTime) {
-               source.stop(endTimeCtx);
+               localGain.gain.setValueAtTime(1, Math.max(0, endTimeCtx - 0.1));
+               localGain.gain.linearRampToValueAtTime(0, endTimeCtx + crossfade);
+               source.stop(endTimeCtx + crossfade);
             } else {
+               localGain.gain.value = 0;
                source.stop(ctx.currentTime);
             }
         }
@@ -383,7 +408,7 @@ export default function App() {
   };
 
   const handleStart = () => {
-    setHasStarted(true);
+    setHasStartedState(true);
     if (isActuallyTime) return; 
     
     if (audioRef.current) {
@@ -426,8 +451,13 @@ export default function App() {
 
   useEffect(() => {
     if (audioRef.current) {
+      audioRef.current.volume = trackVolume;
       if (isPlaying) {
         audioRef.current.play().catch(e => console.error("Play failed", e));
+        const iframe = document.getElementById('gift-video') as HTMLIFrameElement;
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+        }
       } else {
         audioRef.current.pause();
       }
@@ -462,7 +492,7 @@ export default function App() {
             key="countdown" 
             targetDate={targetDate}
             currentTimeMs={currentTimeMs}
-            onComplete={() => isActuallyTime && setIsRevealed(true)} 
+            onComplete={() => isActuallyTime && setIsRevealedState(true)} 
           />
         ) : (
           <motion.div
@@ -476,7 +506,7 @@ export default function App() {
               
               <main className="relative z-10 transition-opacity duration-1000 ease-in-out">
         {/* Hero Section */}
-        <section className="relative min-h-[100dvh] pt-20 pb-[calc(4rem+env(safe-area-inset-bottom))] flex flex-col items-center justify-center px-6 text-center">
+        <section className="relative min-h-[85vh] pt-20 flex flex-col items-center justify-center px-6 text-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
@@ -542,7 +572,7 @@ export default function App() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 3.5, duration: 1 }}
-                className="mt-6 md:mt-8 flex flex-col items-center"
+                className="mt-2 flex flex-col items-center"
               >
                 <motion.div
                   animate={{ y: [0, 10, 0] }}
@@ -556,7 +586,7 @@ export default function App() {
         </section>
 
         {/* Video Gift Section */}
-        <section className="py-6 md:py-8 px-6 max-w-6xl mx-auto relative z-10">
+        <section className="pb-6 md:pb-8 pt-2 px-6 max-w-6xl mx-auto relative z-10">
           <motion.div
              initial={{ opacity: 0, y: 50 }}
              whileInView={{ opacity: 1, y: 0 }}
@@ -570,37 +600,40 @@ export default function App() {
 
             <div className="relative">
               {/* YouTube Ambient Mode Simulation */}
-              <div className="absolute -inset-8 md:-inset-16 -z-10 bg-[url('https://img.youtube.com/vi/yaJnJ3EKMxw/maxresdefault.jpg')] bg-cover bg-center blur-[80px] md:blur-[100px] opacity-40 saturate-[1.5] brightness-125 transform-gpu rounded-[40px] pointer-events-none" />
+              <div className="hidden md:block absolute -inset-16 -z-10 bg-[url('https://img.youtube.com/vi/yaJnJ3EKMxw/maxresdefault.jpg')] bg-cover bg-center blur-[100px] opacity-40 saturate-[1.5] brightness-125 transform-gpu rounded-[40px] pointer-events-none" />
 
-              <div 
-                className="aspect-video w-full rounded-2xl md:rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative group cursor-pointer"
-                onClick={() => setIsVideoIframeLoaded(true)}
-              >
-              {!isVideoIframeLoaded ? (
-                <>
-                  <img 
-                    src="https://img.youtube.com/vi/yaJnJ3EKMxw/maxresdefault.jpg" 
-                    alt="Video thumbnail"
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              <div className="aspect-video w-full rounded-2xl md:rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative group cursor-pointer">
+                {isVideoIframeLoaded ? (
+                  <iframe
+                    id="gift-video"
+                    className="w-full h-full absolute inset-0 z-10"
+                    src="https://www.youtube-nocookie.com/embed/yaJnJ3EKMxw?autoplay=1&enablejsapi=1&rel=0" 
+                    title="Birthday Video"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
                   />
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/20 transition-colors duration-500">
-                    <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-orange-500/90 text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-[0_0_50px_rgba(249,115,22,0.4)] backdrop-blur-sm">
-                      <Play className="w-8 h-8 md:w-12 md:h-12 ml-1 md:ml-2 text-white fill-white" />
+                ) : (
+                  <div 
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black"
+                    onClick={() => {
+                      setIsVideoIframeLoaded(true);
+                      setIsPlaying(false); // Make sure background music pauses
+                    }}
+                  >
+                    <img 
+                      src="https://img.youtube.com/vi/yaJnJ3EKMxw/maxresdefault.jpg"
+                      alt="Video thumbnail"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/20 transition-colors duration-500">
+                      <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-orange-500/90 text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-[0_0_50px_rgba(249,115,22,0.4)] backdrop-blur-sm">
+                        <Play className="w-8 h-8 md:w-12 md:h-12 ml-1 md:ml-2 text-white fill-white" />
+                      </div>
                     </div>
                   </div>
-                </>
-              ) : (
-                <iframe
-                  id="gift-video"
-                  className="w-full h-full"
-                  src="https://www.youtube.com/embed/yaJnJ3EKMxw?autoplay=1&enablejsapi=1" 
-                  title="Birthday Video"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-view; web-share"
-                  allowFullScreen
-                />
-              )}
-              <div className="absolute inset-0 pointer-events-none border-[6px] md:border-[12px] border-black/20 rounded-2xl md:rounded-3xl" />
-            </div>
+                )}
+                <div className="absolute inset-0 pointer-events-none border-[6px] md:border-[12px] border-black/20 rounded-2xl md:rounded-3xl z-30" />
+              </div>
             </div>
           </motion.div>
         </section>

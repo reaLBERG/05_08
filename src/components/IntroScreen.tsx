@@ -17,7 +17,8 @@ export const IntroScreen = ({ onStart }: { onStart: () => void; key?: string }) 
             opacity: [0.05, 0.12, 0.05]
           }}
           transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/10 rounded-full blur-[140px]" 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full transform-gpu will-change-transform pointer-events-none" 
+          style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgba(59,130,246,0.3) 0%, transparent 100%)' }}
         />
       </div>
 
@@ -47,7 +48,7 @@ export const IntroScreen = ({ onStart }: { onStart: () => void; key?: string }) 
             />
           ))}
           
-          <span className="relative z-10 text-white font-black italic text-3xl md:text-4xl tracking-tight uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] group-hover:text-blue-200 transition-all duration-300">
+          <span className="relative z-10 text-white font-black italic text-3xl md:text-5xl tracking-tight uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] group-hover:text-blue-200 transition-all duration-300">
             Ready?
           </span>
         </motion.button>

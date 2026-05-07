@@ -5,6 +5,13 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+@layer base {
+  html, body {
+    background-color: #050505;
+    color: white;
+  }
+}
+
 @layer utilities {
   @keyframes twinkle {
     0%, 100% { opacity: 0.2; transform: scale(0.8); }
